@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+arch="$(uname -m)"
+
+has_backend() {
+    command -v kdeconnect-cli >/dev/null 2>&1 || command -v valent >/dev/null 2>&1
+}
+
+aur_helper() {
+    local candidate
+    for candidate in paru yay; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+choose_backend() {
+    local answer=""
+
+    if [ -n "${HYPE_PHONE_BACKEND:-}" ]; then
+        printf '%s\n' "$HYPE_PHONE_BACKEND"
+        return
+    fi
+
+    # KDE Connect is available directly from Arch Linux ARM repositories. Keep
+    # it as the reliable default on both the M1 Mac and Framework builds.
+    printf 'Choose a Phone Companion backend:\n' >&2
+    printf '  1) KDE Connect (recommended)\n' >&2
+    printf '  2) Valent\n' >&2
+    read -r -p 'Selection [1]: ' answer
+    case "$answer" in
+        2|valent|Valent) printf 'valent\n' ;;
+        *) printf 'kdeconnect\n' ;;
+    esac
+}
+
+install_arch() {
+    local backend="$1"
+    local helper=""
+
+    if [ "$backend" = "valent" ]; then
+        helper="$(aur_helper || true)"
+        if [ -z "$helper" ]; then
+            printf 'Valent requires paru or yay on Arch. Install an AUR helper or rerun and choose KDE Connect.\n' >&2
+            exit 2
+        fi
+        "$helper" -S --needed valent gvfs gvfs-mtp openssh
+    else
+        sudo pacman -S --needed kdeconnect sshfs
+    fi
+}
+
+install_debian() {
+    local backend="$1"
+    sudo apt-get update
+    if [ "$backend" = "valent" ]; then
+        sudo apt-get install -y valent gvfs gvfs-backends openssh-client
+    else
+        sudo apt-get install -y kdeconnect sshfs
+    fi
+}
+
+install_fedora() {
+    local backend="$1"
+    if [ "$backend" = "valent" ]; then
+        sudo dnf install -y valent gvfs gvfs-fuse openssh-clients
+    else
+        sudo dnf install -y kde-connect sshfs
+    fi
+}
+
+install_opensuse() {
+    local backend="$1"
+    if [ "$backend" = "valent" ]; then
+        sudo zypper --non-interactive install valent gvfs openssh
+    else
+        sudo zypper --non-interactive install kdeconnect-kde sshfs
+    fi
+}
+
+if has_backend; then
+    if command -v kdeconnect-cli >/dev/null 2>&1; then
+        printf 'KDE Connect is already installed.\n'
+    else
+        printf 'Valent is already installed.\n'
+    fi
+    exit 0
+fi
+
+printf 'Preparing Phone Companion dependencies for %s…\n' "$arch"
+backend="$(choose_backend)"
+
+case "$backend" in
+    kdeconnect|valent) ;;
+    *)
+        printf 'Unknown backend: %s (use kdeconnect or valent).\n' "$backend" >&2
+        exit 2
+        ;;
+esac
+
+if command -v pacman >/dev/null 2>&1; then
+    install_arch "$backend"
+elif command -v apt-get >/dev/null 2>&1; then
+    install_debian "$backend"
+elif command -v dnf >/dev/null 2>&1; then
+    install_fedora "$backend"
+elif command -v zypper >/dev/null 2>&1; then
+    install_opensuse "$backend"
+else
+    printf 'Unsupported package manager. Install KDE Connect or Valent, then reinstall the plugin.\n' >&2
+    exit 2
+fi
+
+if ! has_backend; then
+    printf 'The package installation completed, but no supported backend command was found.\n' >&2
+    exit 1
+fi
+
+printf '\nPhone Companion setup complete. This window will close automatically.\n'

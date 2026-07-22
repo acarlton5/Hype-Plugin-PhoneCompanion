@@ -2,6 +2,11 @@
 
 Connect your phone to your desktop. Supports both KDE Connect and Valent backends.
 
+When installed from Hype's plugin browser, Phone Companion opens the standard
+dependency setup terminal. It accepts an existing KDE Connect or Valent backend;
+otherwise, it offers to install one using the system package manager. KDE Connect
+is the recommended default on both x86_64 and ARM systems.
+
 ## Requirements
 
 ### For KDE Connect
